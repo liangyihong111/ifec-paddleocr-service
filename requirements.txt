@@ -1,10 +1,9 @@
-# Install paddlepaddle separately first, choosing CPU/GPU by machine.
-# CPU example:
-#   python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-
-paddleocr[all]
-fastapi
-uvicorn[standard]
-python-multipart
-requests
-
+# PaddlePaddle is installed separately because CPU and GPU use different
+# packages and indexes. Keep its version aligned with PaddleOCR.
+# doc-parser keeps PPStructureV3 support without pulling unrelated IE,
+# translation, LLM, and LangChain dependencies from the "all" extra.
+paddleocr[doc-parser]==3.2.0
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.9,<1
+requests>=2.31,<3

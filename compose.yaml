@@ -1,0 +1,24 @@
+services:
+  ocr:
+    image: ${OCR_IMAGE:-ghcr.io/liangyihong111/ifec-paddleocr-service:cpu-latest}
+    container_name: ifec-paddleocr-service
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${OCR_PORT:-8100}:8100"
+    environment:
+      PADDLEOCR_DEVICE: cpu
+      PADDLEOCR_LANG: ${PADDLEOCR_LANG:-ch}
+      PADDLEOCR_PIPELINE: ${PADDLEOCR_PIPELINE:-ocr}
+      PADDLEOCR_PRELOAD: ${PADDLEOCR_PRELOAD:-1}
+      PADDLEOCR_USE_ORIENTATION: "false"
+      PADDLEOCR_USE_UNWARPING: "false"
+      PADDLEOCR_USE_TEXTLINE_ORIENTATION: "false"
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+    volumes:
+      - ocr-model-cache:/home/ocr/.paddlex
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  ocr-model-cache:
