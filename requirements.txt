@@ -1,0 +1,10 @@
+# Install paddlepaddle separately first, choosing CPU/GPU by machine.
+# CPU example:
+#   python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+paddleocr[all]
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+
