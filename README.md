@@ -139,3 +139,96 @@ POST http://127.0.0.1:8100/ocr
 Content-Type: multipart/form-data
 file=<PDF/图片>
 ```
+
+## 6. CPU Docker 镜像
+
+Docker 镜像运行 Linux amd64 容器，可部署到 Linux Docker Engine，也可在 Windows 10/11 的 Docker Desktop（Linux 容器模式）中运行。
+
+构建 CPU 镜像：
+
+```powershell
+docker build --target cpu -t ifec-paddleocr-service:cpu .
+```
+
+如果 Docker Hub 在当前网络不可访问，可以通过 `BASE_IMAGE` 指定已同步到内网或国内镜像仓库的 Python 3.10 基础镜像：
+
+```powershell
+docker build --target cpu --build-arg BASE_IMAGE=<镜像仓库>/python:3.10-slim-bookworm `
+  -t ifec-paddleocr-service:cpu .
+```
+
+直接启动：
+
+```powershell
+docker run --name ifec-paddleocr-service --rm -p 8100:8100 `
+  -v ifec-paddleocr-models:/home/ocr/.paddlex `
+  ifec-paddleocr-service:cpu
+```
+
+第一次启动会下载 OCR 模型。模型保存在命名卷 `ifec-paddleocr-models` 中，后续重建容器可以复用。
+
+检查服务存活状态和模型就绪状态：
+
+```powershell
+curl http://127.0.0.1:8100/health
+curl http://127.0.0.1:8100/ready
+```
+
+`/health` 用于存活检查；`/ready` 会确认 OCR Pipeline 已成功加载，未就绪时返回 HTTP 503。
+
+## 7. Docker Compose 部署
+
+复制环境变量示例并按需修改：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+如果使用本地构建的镜像，把 `.env` 中的 `OCR_IMAGE` 改为：
+
+```text
+OCR_IMAGE=ifec-paddleocr-service:cpu
+```
+
+启动服务：
+
+```powershell
+docker compose up -d
+docker compose ps
+```
+
+查看日志或停止服务：
+
+```powershell
+docker compose logs -f ocr
+docker compose down
+```
+
+Linux 上使用相同的 `docker compose` 命令。默认端口为 `8100`，可以通过 `.env` 的 `OCR_PORT` 修改。
+
+## 8. GitHub Actions
+
+工作流 `.github/workflows/docker-image.yml` 会执行单元测试并构建 `linux/amd64` CPU 镜像：
+
+- Pull Request：验证测试和镜像构建，不推送镜像。
+- 推送到 `main`：推送 `cpu-latest` 和带 commit SHA 的 CPU 标签。
+- 推送 `v*` Git tag：额外生成 `<tag>-cpu`，例如 `v1.0.0-cpu`。
+- 手动运行：通过 `publish` 参数决定是否推送到 GitHub Container Registry。
+
+默认镜像地址：
+
+```text
+ghcr.io/liangyihong111/ifec-paddleocr-service:cpu-latest
+```
+
+如果 GitHub Container Registry 包为私有，需要先在部署机器登录：
+
+```powershell
+docker login ghcr.io
+docker compose pull
+docker compose up -d
+```
+
+当前阶段只发布 CPU 镜像。GPU 镜像会使用独立的构建目标和 `gpu-cu126` 标签，避免 CPU/GPU PaddlePaddle 包混装。
+
+Docker 依赖使用 `paddleocr[doc-parser]`，覆盖当前代码使用的通用 OCR 和 `PPStructureV3`。没有安装与本服务无关的信息抽取、翻译及 LLM/LangChain 扩展，避免 `all` 依赖组造成版本冲突和镜像体积膨胀。

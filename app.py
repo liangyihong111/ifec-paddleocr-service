@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -142,6 +143,7 @@ def _startup_preload_pipeline():
 _pipeline = None
 _pipeline_kind: Optional[str] = None
 _pipeline_error: Optional[str] = None
+_pipeline_lock = threading.Lock()
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -158,6 +160,16 @@ def get_pipeline():
     if _pipeline_error is not None:
         raise RuntimeError(_pipeline_error)
 
+    with _pipeline_lock:
+        if _pipeline is not None:
+            return _pipeline
+        if _pipeline_error is not None:
+            raise RuntimeError(_pipeline_error)
+        return _initialize_pipeline()
+
+
+def _initialize_pipeline():
+    global _pipeline, _pipeline_error, _pipeline_kind
     try:
         pipeline_kind = os.getenv("PADDLEOCR_PIPELINE", "ocr").strip().lower()
         common_kwargs: Dict[str, Any] = {
@@ -660,6 +672,30 @@ def health():
         "pipelineLoaded": _pipeline is not None,
         "pipelineKind": _pipeline_kind or os.getenv("PADDLEOCR_PIPELINE", "ocr").strip().lower(),
         "pipelineError": _pipeline_error,
+    }
+
+
+@app.get("/ready")
+def ready():
+    """Readiness probe that verifies the OCR pipeline can be loaded."""
+    try:
+        get_pipeline()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "not-ready",
+                "pipelineKind": _pipeline_kind
+                or os.getenv("PADDLEOCR_PIPELINE", "ocr").strip().lower(),
+                "pipelineError": str(exc),
+            },
+        ) from exc
+
+    return {
+        "status": "ready",
+        "pipelineLoaded": True,
+        "pipelineKind": _pipeline_kind,
+        "device": os.getenv("PADDLEOCR_DEVICE", "cpu"),
     }
 
 

@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+__pycache__
+*.py[cod]
+*.log
+.env
+.tmp
+.pip-cache
+uploads
+output
+tests
+test_*.py
+README.md
+run_gpu.ps1
