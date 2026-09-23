@@ -204,7 +204,7 @@ docker compose logs -f ocr
 docker compose down
 ```
 
-Linux 上使用相同的 `docker compose` 命令。默认端口为 `8100`，可以通过 `.env` 的 `OCR_PORT` 修改。
+Linux 上使用相同的 `docker compose` 命令。容器内端口为 `8100`；宿主机默认只监听 `127.0.0.1:8866`，可通过 `.env` 的 `OCR_BIND_HOST`、`OCR_BIND_PORT` 修改。Ubuntu 服务器的逐条部署命令和 Nginx 接入配置见 [`deploy/ubuntu-cpu.md`](deploy/ubuntu-cpu.md)。
 
 ## 8. GitHub Actions
 
@@ -229,6 +229,6 @@ docker compose pull
 docker compose up -d
 ```
 
-当前阶段只发布 CPU 镜像。GPU 镜像会使用独立的构建目标和 `gpu-cu126` 标签，避免 CPU/GPU PaddlePaddle 包混装。
+当前阶段只发布 CPU 镜像。GPU 镜像应使用独立的构建目标和标签，避免 CPU/GPU PaddlePaddle 包混装；Tesla P40 应先验证 CUDA 11.8 版本。
 
 Docker 依赖使用 `paddleocr[doc-parser]`，覆盖当前代码使用的通用 OCR 和 `PPStructureV3`。没有安装与本服务无关的信息抽取、翻译及 LLM/LangChain 扩展，避免 `all` 依赖组造成版本冲突和镜像体积膨胀。
