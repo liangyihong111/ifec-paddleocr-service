@@ -5,7 +5,7 @@ services:
     init: true
     restart: unless-stopped
     ports:
-      - "${OCR_PORT:-8100}:8100"
+      - "${OCR_BIND_HOST:-127.0.0.1}:${OCR_BIND_PORT:-8866}:8100"
     environment:
       PADDLEOCR_DEVICE: cpu
       PADDLEOCR_LANG: ${PADDLEOCR_LANG:-ch}

@@ -1,0 +1,14 @@
+# Add this location inside the OCR server's existing port-80 Nginx server block.
+# Replace JAVA_BACKEND_SOURCE_IP with the source IP observed by Nginx.
+# Keep the upstream port aligned with OCR_BIND_PORT in the Compose .env file.
+location = /api/v1/ocr {
+    allow 127.0.0.1;
+    allow JAVA_BACKEND_SOURCE_IP;
+    deny all;
+
+    client_max_body_size 110m;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout 660s;
+    proxy_read_timeout 660s;
+    proxy_pass http://127.0.0.1:8866/ocr;
+}
