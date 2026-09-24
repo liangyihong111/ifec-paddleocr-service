@@ -208,17 +208,21 @@ Linux 上使用相同的 `docker compose` 命令。容器内端口为 `8100`；�
 
 ## 8. GitHub Actions
 
-工作流 `.github/workflows/docker-image.yml` 会执行单元测试并构建 `linux/amd64` CPU 镜像：
+两个工作流都会执行单元测试，并构建 `linux/amd64` 镜像：
 
-- Pull Request：验证测试和镜像构建，不推送镜像。
-- 推送到 `main`：推送 `cpu-latest` 和带 commit SHA 的 CPU 标签。
-- 推送 `v*` Git tag：额外生成 `<tag>-cpu`，例如 `v1.0.0-cpu`。
-- 手动运行：通过 `publish` 参数决定是否推送到 GitHub Container Registry。
+- `.github/workflows/docker-image.yml`：CPU 镜像。
+- `.github/workflows/docker-gpu-image.yml`：CUDA 11.8 GPU 镜像。
+
+- Pull Request：验证测试和镜像构建，不推送镜像；仅在对应镜像的源码、依赖或工作流变更时运行。
+- 推送到 `main`：分别推送 `cpu-latest`、`gpu-cu118-latest` 和带 commit SHA 的标签。
+- 推送 `v*` Git tag：额外生成 `<tag>-cpu` 和 `<tag>-gpu-cu118`，例如 `v1.0.0-gpu-cu118`。
+- 手动运行：在 GitHub Actions 中选择相应工作流，通过 `publish` 参数决定是否推送到 GitHub Container Registry。非默认分支手动发布时使用 SHA 标签。
 
 默认镜像地址：
 
 ```text
 ghcr.io/liangyihong111/ifec-paddleocr-service:cpu-latest
+ghcr.io/liangyihong111/ifec-paddleocr-service:gpu-cu118-latest
 ```
 
 如果 GitHub Container Registry 包为私有，需要先在部署机器登录：
@@ -229,6 +233,31 @@ docker compose pull
 docker compose up -d
 ```
 
-当前阶段只发布 CPU 镜像。GPU 镜像应使用独立的构建目标和标签，避免 CPU/GPU PaddlePaddle 包混装；Tesla P40 应先验证 CUDA 11.8 版本。
+GPU 镜像使用独立的 `Dockerfile.gpu`，从飞桨 CUDA 11.8 软件源安装 `paddlepaddle-gpu==3.2.0`；CPU 镜像继续使用 `Dockerfile` 和 CPU 软件源。两个工作流的构建缓存也互相隔离。GitHub Actions 的普通 runner 仅验证镜像构建，GPU 推理需要在配置好 NVIDIA 驱动与容器运行时的服务器上验证。
 
 Docker 依赖使用 `paddleocr[doc-parser]`，覆盖当前代码使用的通用 OCR 和 `PPStructureV3`。没有安装与本服务无关的信息抽取、翻译及 LLM/LangChain 扩展，避免 `all` 依赖组造成版本冲突和镜像体积膨胀。
+
+## 9. GPU Docker 镜像
+
+在支持 CUDA 11.8 的 NVIDIA 驱动、NVIDIA Container Toolkit 和 CDI 已配置的 Linux 服务器上，可以本地构建：
+
+```bash
+docker build -f Dockerfile.gpu -t ifec-paddleocr-service:gpu-cu118 .
+```
+
+或在 GitHub Actions 发布后拉取：
+
+```bash
+docker pull ghcr.io/liangyihong111/ifec-paddleocr-service:gpu-cu118-latest
+```
+
+如果服务器已有 `compose.gpu.yaml`，把其中的 `OCR_GPU_IMAGE` 指向上述 GHCR 镜像，再运行：
+
+```bash
+OCR_GPU_IMAGE=ghcr.io/liangyihong111/ifec-paddleocr-service:gpu-cu118-latest \
+  docker compose -f compose.gpu.yaml up -d --no-deps --force-recreate ocr
+docker compose -f compose.gpu.yaml ps
+curl http://127.0.0.1:8866/ready
+```
+
+Compose 服务需保留 `PADDLEOCR_DEVICE=gpu:0`、`devices: [nvidia.com/gpu=all]`、模型卷挂载和 `8866:8100` 端口映射。仅供本机访问时使用 `127.0.0.1:8866:8100`；向其他服务器开放时可绑定服务器内网 IP。容器内服务仍监听 `0.0.0.0:8100`。镜像不内置 OCR 模型，首次启动会下载到挂载的 `/home/ocr/.paddlex`。
