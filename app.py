@@ -178,10 +178,31 @@ def _initialize_pipeline():
             "use_textline_orientation": _env_bool("PADDLEOCR_USE_TEXTLINE_ORIENTATION", False),
         }
 
-        for arg_name, env_name in {"device": "PADDLEOCR_DEVICE", "lang": "PADDLEOCR_LANG"}.items():
+        pipeline_env_args = {
+            "device": "PADDLEOCR_DEVICE",
+            "lang": "PADDLEOCR_LANG",
+        }
+        for arg_name, env_name in pipeline_env_args.items():
             env_value = os.getenv(env_name)
             if env_value:
                 common_kwargs[arg_name] = env_value
+
+        model_dir_args = {
+            "text_detection_model_dir": (
+                "PADDLEOCR_TEXT_DETECTION_MODEL_DIR",
+                "/home/ocr/.paddlex/official_models/PP-OCRv5_server_det",
+            ),
+            "text_recognition_model_dir": (
+                "PADDLEOCR_TEXT_RECOGNITION_MODEL_DIR",
+                "/home/ocr/.paddlex/official_models/PP-OCRv5_server_rec",
+            ),
+        }
+        for arg_name, (env_name, default_dir) in model_dir_args.items():
+            model_dir = os.getenv(env_name)
+            if not model_dir and os.path.isdir(default_dir):
+                model_dir = default_dir
+            if model_dir:
+                common_kwargs[arg_name] = model_dir
 
         if pipeline_kind == "structure":
             from paddleocr import PPStructureV3
