@@ -239,7 +239,7 @@ Docker 依赖使用 `paddleocr[doc-parser]`，覆盖当前代码使用的通用 
 
 ## 9. GPU Docker 镜像
 
-在支持 CUDA 11.8 的 NVIDIA 驱动、NVIDIA Container Toolkit 和 CDI 已配置的 Linux 服务器上，可以本地构建：
+在 NVIDIA 驱动支持 CUDA 11.8、且 Docker 已配置 NVIDIA Container Toolkit 的 Linux 服务器上，可以本地构建：
 
 ```bash
 docker build -f Dockerfile.gpu -t ifec-paddleocr-service:gpu-cu118 .
@@ -251,13 +251,17 @@ docker build -f Dockerfile.gpu -t ifec-paddleocr-service:gpu-cu118 .
 docker pull ghcr.io/liangyihong111/ifec-paddleocr-service:gpu-cu118-latest
 ```
 
-如果服务器已有 `compose.gpu.yaml`，把其中的 `OCR_GPU_IMAGE` 指向上述 GHCR 镜像，再运行：
+仓库提供 `compose.gpu.yaml`。它默认使用本地镜像 `ifec-paddleocr-service:gpu`、宿主机第 7 块 GPU、`127.0.0.1:8866`，并把宿主机 `/opt/ifec/paddlex-cache` 挂载到容器内 `/home/ocr/.paddlex`。`pull_policy: never` 保证离线服务器不会尝试拉取镜像；启动前须用 `docker image ls` 确认已导入的镜像标签，并准备好含完整模型的缓存目录。目录须允许容器用户 UID 10001 读取和写入；Compose 不会自动创建缺失的目录。
+
+可用 `nvidia-smi -L` 查看宿主机 GPU。Compose 通过 Docker 的 NVIDIA GPU 设备预留选择显卡，不要求生成 CDI 配置，但 Docker 仍须已安装和配置 NVIDIA Container Toolkit。比如使用第 1 块 GPU、已导入的 GHCR 镜像和自定义模型目录：
 
 ```bash
 OCR_GPU_IMAGE=ghcr.io/liangyihong111/ifec-paddleocr-service:gpu-cu118-latest \
-  docker compose -f compose.gpu.yaml up -d --no-deps --force-recreate ocr
+OCR_GPU_DEVICE_ID=1 \
+OCR_MODEL_CACHE_DIR=/opt/ifec/paddlex-cache \
+  docker compose -f compose.gpu.yaml up -d
 docker compose -f compose.gpu.yaml ps
 curl http://127.0.0.1:8866/ready
 ```
 
-Compose 服务需保留 `PADDLEOCR_DEVICE=gpu:0`、`devices: [nvidia.com/gpu=all]`、模型卷挂载和 `8866:8100` 端口映射。仅供本机访问时使用 `127.0.0.1:8866:8100`；向其他服务器开放时可绑定服务器内网 IP。容器内服务仍监听 `0.0.0.0:8100`。镜像不内置 OCR 模型，首次启动会下载到挂载的 `/home/ocr/.paddlex`。
+如果用 `sudo` 运行 Compose，可以先把上述变量写到项目目录的 `.env` 文件（该文件已被 Git 忽略），再执行 `sudo docker compose -f compose.gpu.yaml up -d`。容器内只看到选中的 GPU，因此 `PADDLEOCR_DEVICE=gpu:0` 不需要随宿主机 GPU 编号改变。仅供本机访问时保留默认 `127.0.0.1`；要向其他服务器开放，可设置 `OCR_GPU_BIND_HOST` 为服务器内网 IP，并配置防火墙。容器内服务仍监听 `0.0.0.0:8100`。镜像不内置 OCR 模型，离线运行前必须从联网机器完整迁移 `/home/ocr/.paddlex` 模型缓存，否则启动时无法下载模型。

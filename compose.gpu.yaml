@@ -1,0 +1,36 @@
+name: ${OCR_GPU_PROJECT_NAME:-paddleocr-service}
+
+services:
+  ocr:
+    image: ${OCR_GPU_IMAGE:-ifec-paddleocr-service:gpu}
+    pull_policy: never
+    init: true
+    restart: unless-stopped
+    shm_size: "1g"
+    environment:
+      PADDLEOCR_DEVICE: gpu:0
+      NVIDIA_DRIVER_CAPABILITIES: compute
+      PADDLEOCR_LANG: ${PADDLEOCR_LANG:-ch}
+      PADDLEOCR_PIPELINE: ${PADDLEOCR_PIPELINE:-ocr}
+      PADDLEOCR_PRELOAD: ${PADDLEOCR_PRELOAD:-1}
+      PADDLEOCR_USE_ORIENTATION: "false"
+      PADDLEOCR_USE_UNWARPING: "false"
+      PADDLEOCR_USE_TEXTLINE_ORIENTATION: "false"
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${OCR_GPU_DEVICE_ID:-7}"]
+              capabilities: [gpu]
+    ports:
+      - "${OCR_GPU_BIND_HOST:-127.0.0.1}:${OCR_GPU_BIND_PORT:-8866}:8100"
+    volumes:
+      - type: bind
+        source: ${OCR_MODEL_CACHE_DIR:-/opt/ifec/paddlex-cache}
+        target: /home/ocr/.paddlex
+        bind:
+          create_host_path: false
+    security_opt:
+      - no-new-privileges:true

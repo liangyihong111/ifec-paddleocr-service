@@ -1,0 +1,34 @@
+[Unit]
+Description=IFEC PaddleOCR Service
+After=network.target
+
+[Service]
+Type=simple
+User=ifecocr
+Group=ifecocr
+
+WorkingDirectory=/opt/ifec/ocr
+Environment=HOME=/home/ifecocr
+
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=PADDLEOCR_DEVICE=gpu:0
+Environment=PADDLEOCR_PIPELINE=ocr
+Environment=PADDLEOCR_LANG=ch
+Environment=PADDLEOCR_PRELOAD=1
+
+Environment=PADDLEOCR_USE_ORIENTATION=false
+Environment=PADDLEOCR_USE_UNWARPING=false
+Environment=PADDLEOCR_USE_TEXTLINE_ORIENTATION=false
+Environment=PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+
+Environment=PADDLEOCR_TEXT_DETECTION_MODEL_DIR=/opt/ifec/paddle-models/official_models/PP-OCRv5_server_det
+Environment=PADDLEOCR_TEXT_RECOGNITION_MODEL_DIR=/opt/ifec/paddle-models/official_models/PP-OCRv5_server_rec
+
+ExecStart=/opt/ifec/ocr-env/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8100 --workers 1
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
