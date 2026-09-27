@@ -5,4 +5,4 @@ uploads/
 output/
 *.log
 .env
-
+paddleocr-models/

@@ -2,7 +2,7 @@ name: ${OCR_GPU_PROJECT_NAME:-paddleocr-service-offline}
 
 services:
   ocr:
-    image: ${OCR_GPU_IMAGE:-ifec-paddleocr-service:gpu-offline}
+    image: ${OCR_GPU_IMAGE:-ifec-paddleocr-service:gpu-cu126-offline}
     pull_policy: never
     init: true
     restart: unless-stopped
