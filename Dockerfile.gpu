@@ -1,28 +1,10 @@
 ARG BASE_IMAGE=python:3.10-slim-bookworm
-FROM ${BASE_IMAGE}
-
-ARG PADDLE_VERSION=3.2.0
-ARG VCS_REF=unknown
-ARG BUILD_DATE=unknown
-
-LABEL org.opencontainers.image.title="IFEC PaddleOCR Service" \
-      org.opencontainers.image.description="CUDA 11.8 GPU container for the IFEC PaddleOCR HTTP service" \
-      org.opencontainers.image.source="https://github.com/liangyihong111/ifec-paddleocr-service" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.created="${BUILD_DATE}"
+FROM ${BASE_IMAGE} AS system-base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PADDLEOCR_DEVICE=gpu:0 \
-    PADDLEOCR_PIPELINE=ocr \
-    PADDLEOCR_PRELOAD=1 \
-    PADDLEOCR_LANG=ch \
-    PADDLEOCR_USE_ORIENTATION=false \
-    PADDLEOCR_USE_UNWARPING=false \
-    PADDLEOCR_USE_TEXTLINE_ORIENTATION=false \
-    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+    PIP_NO_CACHE_DIR=1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -34,12 +16,64 @@ RUN apt-get update \
         libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
+
+# Model weights are device-independent. Use a disposable CPU stage to download
+# them during docker build; this stage is not included in the final GPU image.
+FROM system-base AS model-downloader
+
+ARG PADDLE_VERSION=3.2.0
+
+WORKDIR /model-download
+
+COPY requirements.txt ./
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install "paddlepaddle==${PADDLE_VERSION}" \
+        --index-url https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
+    && python -m pip install -r requirements.txt
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin ocr \
+    && mkdir -p /home/ocr/.paddlex \
+    && chown -R ocr:ocr /home/ocr
+
+USER ocr
+
+ENV HOME=/home/ocr
+
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(device='cpu', lang='ch', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False); print('MODEL_DOWNLOAD_OK')" \
+    && test -f /home/ocr/.paddlex/official_models/PP-OCRv5_server_det/inference.pdiparams \
+    && test -f /home/ocr/.paddlex/official_models/PP-OCRv5_server_rec/inference.pdiparams
+
+
+FROM system-base AS gpu
+
+ARG PADDLE_VERSION=3.2.0
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="IFEC PaddleOCR Service" \
+      org.opencontainers.image.description="CUDA 12.6 GPU container with bundled PP-OCRv5 models" \
+      org.opencontainers.image.source="https://github.com/liangyihong111/ifec-paddleocr-service" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
+ENV HOME=/home/ocr \
+    PADDLEOCR_DEVICE=gpu:0 \
+    PADDLEOCR_PIPELINE=ocr \
+    PADDLEOCR_PRELOAD=1 \
+    PADDLEOCR_LANG=ch \
+    PADDLEOCR_USE_ORIENTATION=false \
+    PADDLEOCR_USE_UNWARPING=false \
+    PADDLEOCR_USE_TEXTLINE_ORIENTATION=false \
+    PADDLEOCR_TEXT_DETECTION_MODEL_DIR=/opt/paddleocr-models/PP-OCRv5_server_det \
+    PADDLEOCR_TEXT_RECOGNITION_MODEL_DIR=/opt/paddleocr-models/PP-OCRv5_server_rec \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+
 WORKDIR /app
 
 COPY requirements.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install "paddlepaddle-gpu==${PADDLE_VERSION}" \
-        --index-url https://www.paddlepaddle.org.cn/packages/stable/cu118/
+        --index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
 RUN python -m pip install -r requirements.txt \
     && python -m pip check \
     && python -c "from importlib.metadata import version; print('PaddlePaddle GPU', version('paddlepaddle-gpu'), 'PaddleOCR', version('paddleocr'))"
@@ -47,8 +81,15 @@ RUN python -m pip install -r requirements.txt \
 COPY app.py field_extractor.py ./
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin ocr \
-    && mkdir -p /home/ocr/.paddlex \
-    && chown -R ocr:ocr /home/ocr
+    && mkdir -p /home/ocr/.paddlex/temp /opt/paddleocr-models \
+    && chown -R ocr:ocr /home/ocr /opt/paddleocr-models
+
+COPY --from=model-downloader --chown=10001:10001 \
+    /home/ocr/.paddlex/official_models/ \
+    /opt/paddleocr-models/
+
+RUN test -f /opt/paddleocr-models/PP-OCRv5_server_det/inference.pdiparams \
+    && test -f /opt/paddleocr-models/PP-OCRv5_server_rec/inference.pdiparams
 
 USER ocr
 
