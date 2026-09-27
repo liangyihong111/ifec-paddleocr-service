@@ -237,6 +237,8 @@ GPU 镜像使用独立的 `Dockerfile.gpu`，从飞桨 CUDA 11.8 软件源安装
 
 Docker 依赖使用 `paddleocr[doc-parser]`，覆盖当前代码使用的通用 OCR 和 `PPStructureV3`。没有安装与本服务无关的信息抽取、翻译及 LLM/LangChain 扩展，避免 `all` 依赖组造成版本冲突和镜像体积膨胀。
 
+需要部署到完全无外网的服务器时，可在有网 Linux 主机上构建包含 PP-OCRv5 检测、识别模型的 CPU/GPU 离线镜像，再通过 `docker save` 和 `docker load` 迁移。完整步骤见 [`deploy/offline-images.md`](deploy/offline-images.md)。离线模型存放在镜像的 `/opt/paddleocr-models`，不会被运行缓存卷 `/home/ocr/.paddlex` 覆盖。
+
 ## 9. GPU Docker 镜像
 
 在 NVIDIA 驱动支持 CUDA 11.8、且 Docker 已配置 NVIDIA Container Toolkit 的 Linux 服务器上，可以本地构建：

@@ -1,0 +1,41 @@
+ARG MODEL_FETCHER_IMAGE=ifec-paddleocr-service:cpu
+ARG RUNTIME_IMAGE=ifec-paddleocr-service:gpu
+
+# OCR model weights are device-independent. Download them with the CPU image so
+# a GPU is not required on the connected build host.
+FROM ${MODEL_FETCHER_IMAGE} AS model-downloader
+
+ENV HOME=/home/ocr \
+    PADDLEOCR_DEVICE=cpu \
+    PADDLEOCR_PIPELINE=ocr \
+    PADDLEOCR_LANG=ch \
+    PADDLEOCR_USE_ORIENTATION=false \
+    PADDLEOCR_USE_UNWARPING=false \
+    PADDLEOCR_USE_TEXTLINE_ORIENTATION=false
+
+RUN env -u PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK python -c "from paddleocr import PaddleOCR; PaddleOCR(device='cpu', lang='ch', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False); print('MODEL_DOWNLOAD_OK')" \
+    && test -f /home/ocr/.paddlex/official_models/PP-OCRv5_server_det/inference.pdiparams \
+    && test -f /home/ocr/.paddlex/official_models/PP-OCRv5_server_rec/inference.pdiparams
+
+FROM ${RUNTIME_IMAGE}
+
+LABEL org.opencontainers.image.description="IFEC PaddleOCR service with bundled PP-OCRv5 models for offline deployment"
+
+USER root
+
+# Keep immutable bundled models outside /home/ocr/.paddlex. A runtime cache
+# volume mounted at that path therefore cannot hide the bundled model files.
+COPY --from=model-downloader --chown=10001:10001 \
+    /home/ocr/.paddlex/official_models/ \
+    /opt/paddleocr-models/
+
+RUN test -f /opt/paddleocr-models/PP-OCRv5_server_det/inference.pdiparams \
+    && test -f /opt/paddleocr-models/PP-OCRv5_server_rec/inference.pdiparams \
+    && mkdir -p /home/ocr/.paddlex/temp \
+    && chown -R 10001:10001 /home/ocr/.paddlex /opt/paddleocr-models
+
+ENV PADDLEOCR_TEXT_DETECTION_MODEL_DIR=/opt/paddleocr-models/PP-OCRv5_server_det \
+    PADDLEOCR_TEXT_RECOGNITION_MODEL_DIR=/opt/paddleocr-models/PP-OCRv5_server_rec \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+
+USER ocr
